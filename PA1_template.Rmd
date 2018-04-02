@@ -8,18 +8,71 @@ output:
 
 ## Loading and preprocessing the data
 
+```{r}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
 
+steps <- read.csv("activity.csv") %>% mutate(date=as.Date(date))
+summary(steps)
+```
 
 ## What is mean total number of steps taken per day?
 
+```{r}
 
+
+stepsperday <- steps %>% group_by(date) %>% summarise(steps=sum(steps))
+meanstepperday <- mean(stepsperday$steps, na.rm = T)
+medianstepperday <- median(stepsperday$steps, na.rm = T)
+
+ggplot(stepsperday, aes(x=steps)) + geom_histogram(binwidth=500)
+
+```
+
+The mean total number of steps taken per day is equal `r meanstepperday` and the median number of steps is `r medianstepperday`.
 
 ## What is the average daily activity pattern?
 
+```{r}
+avgstepsperint <- steps %>% group_by(interval) %>% summarise(steps=mean(steps, na.rm = T))
+ggplot(avgstepsperint, aes(x = interval, y = steps)) + geom_line()
 
+
+maxstepint <- last(avgstepsperint$interval, order_by = avgstepsperint$steps)
+maxstep <- max(avgstepsperint$steps)
+```
+
+The `r maxstepint` is the interval with the highest average number of steps (`r maxstep`).
 
 ## Imputing missing values
 
+```{r}
+narows <- nrow(steps) - sum(complete.cases(steps))
+```
+Dataset contains `r narows` rows with missing data. I will replace NAs with intervals mean rounded to the closest integer.
+
+```{r}
+nonasteps <- steps %>% inner_join(avgstepsperint, by='interval') %>% mutate(steps.z=round(steps.y), steps.z=as.integer(steps.z), steps=coalesce(steps.x, steps.z)) %>% select(steps, date, interval)
+
+nonastepsperday <- nonasteps %>% group_by(date) %>% summarise(steps=sum(steps))
+nonameanstepperday <- mean(nonastepsperday$steps)
+nonamedianstepperday <- median(nonastepsperday$steps)
+
+ggplot(nonastepsperday, aes(x=steps)) + geom_histogram(binwidth=500)
+
+```
+
+After filling NAs we can see a new 'spike' around mean (10.7K). The mean and median stayed almost unafected. The new mean total number of steps taken per day is equal `r nonameanstepperday` and the new median number of steps is `r nonamedianstepperday`.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r} 
+nonasteps$daytype <- as.factor(ifelse(wday(nonasteps$date) %in% c(1,7), "weekend", "weekday"))
+nonaavgstepsperint <- nonasteps %>% group_by(daytype, interval) %>% summarise(steps=mean(steps))
+ggplot(nonaavgstepsperint, aes(x = interval, y = steps)) + geom_line() + facet_wrap( ~ daytype)
+```
+
+During the weekday there is a spike in the beginig of the day suggesting people exercise before or while comuting to work. During the weekend steps are distributed more evenly all day long.
+
